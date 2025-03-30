@@ -1,22 +1,51 @@
-import React, {useEffect, useState} from 'react';
+import React, {useCallback, useEffect, useState} from 'react';
 import '../Contact.css';
 import {baseUrl} from "../utils/constants.js";
 
+const STORAGE_KEY = "listOfPlanets";
+const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
 
 const Contact = () => {
     const [planets, setPlanets] = useState(['Loading...']);
 
-    async function fetchPlanets() {
-        const response = await fetch(`${baseUrl}/v1/planets`);
-        const data = await response.json();
-        const planets = data.map(item => item.name);
-        setPlanets(planets);
-    }
+    const isExpired = (timestamp) => {
+        return new Date().getTime() - timestamp > THIRTY_DAYS;
+    };
+
+    const fetchPlanets = useCallback(async () => {
+        try {
+            const storedData = localStorage.getItem(STORAGE_KEY);
+            if (storedData) {
+                const parsedData = JSON.parse(storedData);
+                if (!isExpired(parsedData.timestamp)) {
+                    setPlanets(parsedData.planets);
+                    return;
+                }
+            }
+
+            const response = await fetch(`${baseUrl}/v1/planets`);
+            if (!response.ok) throw new Error("Could not fetch planets");
+
+            const data = await response.json();
+            const planetNames = data.map(item => item.name);
+            setPlanets(planetNames);
+
+            localStorage.setItem(STORAGE_KEY, JSON.stringify({
+                planets: planetNames,
+                timestamp: new Date().getTime()
+            }));
+
+        } catch {
+            setPlanets(["Error loading data"]);
+        }
+    }, []);
+
 
     useEffect(() => {
         fetchPlanets();
         return () => console.log('Component Contact was unmounted');
-    }, [])
+    }, [fetchPlanets]);
+
     return (
         <form className={'containerContact'} onSubmit={e => e.preventDefault()}>
 
